@@ -239,6 +239,7 @@ function showSetup() {
         jobs: w.jobs,
         days: w.days || [[], [], [], [], [], [], []],
         startDate: today(),
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       });
       history.replaceState(null, '', location.pathname);
       window.scrollTo(0, 0);

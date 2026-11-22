@@ -11,3 +11,9 @@
     X-Robots-Tag = "noindex, nofollow"
     Referrer-Policy = "no-referrer"
     X-Frame-Options = "DENY"
+
+# The service worker must never be cached, so app updates reach phones right away.
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"

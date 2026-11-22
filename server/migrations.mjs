@@ -20,11 +20,20 @@ const MIGRATIONS = [
     if (await store.get('household')) return;
     const people = await store.get('people');
     const g = await store.get('google');
+    const { notify, ...base } = DEFAULT_HOUSEHOLD; // notify belongs to step 2 (same result as v1.0.0)
     await store.set('household', {
-      ...DEFAULT_HOUSEHOLD,
+      ...base,
       calendarName: g?.calendarName || DEFAULT_HOUSEHOLD.calendarName,
       setupDone: Array.isArray(people) && people.length > 0,
     });
+  },
+
+  // 2 (v1.1) — phone notification settings. Uses the Google Calendar's time zone if connected.
+  async () => {
+    const h = await store.get('household');
+    if (!h || h.notify) return;
+    const g = await store.get('google');
+    await store.set('household', { ...h, notify: { ...DEFAULT_HOUSEHOLD.notify, timeZone: g?.timeZone || DEFAULT_HOUSEHOLD.notify.timeZone } });
   },
 ];
 

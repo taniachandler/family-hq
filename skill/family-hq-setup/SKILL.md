@@ -86,7 +86,8 @@ Then have them:
 3. Confirm they can see the Home screen with their app name at the top. **Don't call it done until they confirm this.**
 4. Send the link to the family. Each person taps their name and makes their own code.
 5. Add it to the home screen: iPhone **Share → Add to Home Screen**; Android **⋮ → Add to Home screen**.
-6. Keep the link private. The link plus each person's code is the security.
+6. Turn on notifications: each person goes to **Settings → Notifications → Turn on notifications**. On iPhone, open the app **from the home-screen icon** first (Apple rule). Ask what time chores start and set it under **Reminder times** (default 6:30pm, with an 8pm nudge if it isn't done).
+7. Keep the link private. The link plus each person's code is the security.
 
 ### If something goes wrong
 | What they see | What to do |
@@ -95,6 +96,7 @@ Then have them:
 | "The chart mentions X, who isn't on the list" | Fix the name in the chart so it matches `people` exactly, and make the code again. |
 | "That setup code doesn't look right" | The code got cut off when copied. Use the paste method with the full JSON. |
 | Netlify page says "Page not found" | The deploy hasn't finished or failed. In Netlify → **Deploys**, wait for **Published** or click **Retry deploy**. |
+| No notifications | Check **Settings → Notifications** says "On for [name] on this phone" and tap **Send a test**. iPhone: must be opened from the home-screen icon. If it says blocked, follow the steps shown there. Reminders only come on nights that person has chores. |
 | "Something went wrong on our end" | Wait a minute and try again. If it keeps happening, check Netlify → **Logs → Functions**. |
 
 ## Optional extras (offer, don't push)

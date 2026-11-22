@@ -1,6 +1,6 @@
 # Family HQ
 
-A free, private family app for your phone: **chores with a checklist and grown-up review, a shared grocery list, and a family calendar** (Google Calendar plus school/sports calendar subscriptions).
+A free, private family app for your phone: **chores with a checklist and grown-up review, phone notifications at chore time, a shared grocery list, and a family calendar** (Google Calendar plus school/sports calendar subscriptions).
 
 Each person taps their name and uses their own 4-number code. Kids tick off their chore checklist, then send it for review, and an adult approves it or sends it back with a note.
 
@@ -22,6 +22,7 @@ You need a free [GitHub](https://github.com) account and a free [Netlify](https:
 4. **Set up your family.** Open the link on your phone and follow the setup screens: app name, who lives there, which chores, and which nights. It builds a fair rotation for you.
 5. **Make your code.** Tap your name and pick 4 numbers. Then send the link to your family so each person can make their own code.
 6. **Add it to your home screen.** iPhone: Share → **Add to Home Screen**. Android: ⋮ → **Add to Home screen**.
+7. **Turn on notifications.** Each person: **Settings → Notifications → Turn on**. (On iPhone, open the app from the home-screen icon first. Apple only allows notifications for home-screen apps.)
 
 > **Keep the link private.** Don't post it publicly. The link plus each person's code is what keeps the app safe. Setup can only happen once, so finish it as soon as the app is online.
 
@@ -31,6 +32,17 @@ Adults can change everything under **Settings**:
 - **Jobs & checklists:** rename jobs, edit the steps people tick off, and add or delete jobs.
 - **Family names:** add people or rename them.
 - **App name:** the name at the top of the app, and the name of your Google calendar.
+- **Notifications:** reminder times for everyone (chore time, plus an optional "still not done" nudge) and your time zone. Each person also picks which notifications they want.
+
+---
+
+## Notifications
+
+Family HQ can buzz phones:
+- **Kids:** at chore time ("Chore time, Leo! Tonight: Kitchen"), with a nudge later if it still isn't done, and when an adult approves the chore or sends it back with a note.
+- **Adults:** when a chore is ready to review.
+
+There's nothing to set up. Each app makes its own notification keys the first time someone turns them on, and the reminders run on Netlify's free scheduled functions every 15 minutes. **iPhone:** add the app to the home screen and open it from there (iOS 16.4 or newer). **Android:** works in Chrome, with or without the home screen.
 
 ---
 
@@ -64,7 +76,9 @@ The update check asks GitHub once a day for the newest version number. It sends 
 ## For tinkerers
 
 - `public/`: the app people see (plain HTML/CSS/JS, no build step). `setup.js` holds the first-run setup screens and the rotation builder.
-- `server/`: the backend. `app.mjs` has all the API routes, `migrations.mjs` handles safe upgrades, and `version.mjs` has the version and update check.
+- `server/`: the backend. `app.mjs` has all the API routes and the reminder schedule, `push.mjs` sends notifications (no outside libraries), `migrations.mjs` handles safe upgrades, and `version.mjs` has the version and update check.
+- `netlify/functions/reminders.mjs`: runs every 15 minutes to send chore-time reminders.
+- `public/sw.js` and `public/notify.js`: show notifications on the phone, and the Notifications settings screen.
 - `netlify/functions/api.mjs`: runs the backend on Netlify at `/api/*`.
 - `skill/family-hq-setup/`: the Claude skill that sets the app up for a family.
 - Data lives in **Netlify Blobs**, which is free and built into Netlify. Codes are hashed with scrypt and a salt, and are never stored in plain text.
@@ -76,7 +90,7 @@ npm install
 npm run dev
 ```
 
-Then open http://localhost:8788. Test data is saved in `.data/`.
+Then open http://localhost:8788. Test data is saved in `.data/`. Run `npm test` to check notifications end to end.
 
 ## License
 

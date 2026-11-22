@@ -17,4 +17,6 @@ export const DEFAULT_HOUSEHOLD = {
   name: 'Family HQ',
   calendarName: 'Family Calendar',
   setupDone: false,
+  // phone notifications: chore-time reminder, a later nudge if it's not done ('' = no nudge)
+  notify: { on: true, choreTime: '18:30', nudgeTime: '20:00', timeZone: 'America/New_York' },
 };

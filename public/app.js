@@ -295,6 +295,7 @@ async function switchPerson() {
 function startApp() {
   signinMode(false);
   state.pinKey = null;
+  if (!push.reg) registerWorker();
   $('#top').innerHTML = `
     <div class="brand">${esc(hqName())}<small>${esc(state.me.name)}</small></div>
     <button class="icon-btn" data-go="#/settings" aria-label="Settings">${icon('gear')}</button>
@@ -408,7 +409,7 @@ async function viewHome() {
   const t = today();
   const d = await api('/home?date=' + t);
   setBadge(d.reviewCount);
-  let h = `<h1>Hi, ${esc(state.me.name)}</h1><p class="muted">${esc(fmtDay(t, { weekday: 'long', month: 'long', day: 'numeric' }))}</p>`;
+  let h = `<h1>Hi, ${esc(state.me.name)}</h1><p class="muted">${esc(fmtDay(t, { weekday: 'long', month: 'long', day: 'numeric' }))}</p><div id="home-push"></div>`;
 
   if (d.myChores.length) {
     h += d.myChores.map(heroCard).join('');
@@ -437,6 +438,7 @@ async function viewHome() {
   if (isAdult()) h += '<a class="btn secondary" href="#/chore-new">+ Add a one-off chore</a>';
   if (!paint(seq, h)) return;
   homeCalendar(seq);
+  homePushCard().catch(() => {});
 }
 
 async function homeCalendar(seq) {
@@ -1016,6 +1018,7 @@ async function viewSettings(sub) {
     paint(seq, `<h1>Settings</h1>
       <div class="card settings-list">
         <a href="#/settings/code"><span>Change my code</span><span class="chev">›</span></a>
+        <a href="#/settings/notify"><span>Notifications</span><span class="chev">›</span></a>
         ${adult ? `<a href="#/settings/reset"><span>Reset someone’s code</span><span class="chev">›</span></a>
         <a href="#/settings/names"><span>Family names</span><span class="chev">›</span></a>
         <a href="#/settings/chart"><span>Weekly chore chart</span><span class="chev">›</span></a>
@@ -1024,7 +1027,6 @@ async function viewSettings(sub) {
         <a href="#/settings/calendar"><span>Google Calendar connection</span><span class="chev">›</span></a>
         <a href="#/settings/feeds"><span>Calendar subscriptions (iCal)</span><span class="chev">›</span></a>` : ''}
       </div>
-      <div class="card"><h3>Notifications</h3><p class="muted">Chore-time notifications are coming in a later step.</p></div>
       <div class="card"><h3>About</h3><p>Keep this app’s link private — don’t post it anywhere public. The link plus each person’s code is what keeps the app safe.</p>
         <p class="muted small" data-version>Version ${esc(state.config?.version || '')}</p></div>`);
     if (adult) api('/version').then((v) => {
@@ -1037,8 +1039,8 @@ async function viewSettings(sub) {
     }).catch(() => {});
     return;
   }
-  if (sub !== 'code' && !adult) { location.hash = '#/settings'; return; }
-  const views = { code: settingsCode, reset: settingsReset, names: settingsNames, chart: settingsChart, jobs: settingsJobs, household: settingsHousehold, feeds: settingsFeeds, calendar: settingsCalendar };
+  if (sub !== 'code' && sub !== 'notify' && !adult) { location.hash = '#/settings'; return; }
+  const views = { code: settingsCode, notify: settingsNotify, reset: settingsReset, names: settingsNames, chart: settingsChart, jobs: settingsJobs, household: settingsHousehold, feeds: settingsFeeds, calendar: settingsCalendar };
   return (views[sub] || (() => (location.hash = '#/settings')))(seq);
 }
 

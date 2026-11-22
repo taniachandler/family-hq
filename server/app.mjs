@@ -7,6 +7,7 @@ import * as google from './google.mjs';
 import { feedEvents } from './ical.mjs';
 import { migrate } from './migrations.mjs';
 import { VERSION, updateInfo } from './version.mjs';
+import { notify, vapid, subKey, allSubs, prefsFor, PREF_DEFAULTS } from './push.mjs';
 
 const SESSION_HOURS = 12;
 const MAX_TRIES = 5;
@@ -55,7 +56,10 @@ async function seeded(key, seed) {
 const getPeople = () => seeded('people', SEED_PEOPLE);
 const getChart = () => seeded('chart', SEED_CHART);
 const getChecklists = () => seeded('checklists', SEED_CHECKLISTS);
-const getHousehold = async () => ({ ...DEFAULT_HOUSEHOLD, ...((await store.get('household')) || {}) });
+const getHousehold = async () => {
+  const h = (await store.get('household')) || {};
+  return { ...DEFAULT_HOUSEHOLD, ...h, notify: { ...DEFAULT_HOUSEHOLD.notify, ...(h.notify || {}) } };
+};
 
 const slugify = (name) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 20) || 'person';
 function uniqueId(name, taken) {
@@ -221,6 +225,55 @@ async function boughtGroceries(limit = 40) {
   return store.getMany(keys);
 }
 
+// ---------- notifications ----------
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+const toMin = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+const jobList = (cs) => [...new Set(cs.map((c) => c.job))].join(', ');
+
+// Today's date and the time right now, in the family's time zone.
+function localNow(nowMs, timeZone) {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+    timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).formatToParts(new Date(nowMs)).map((p) => [p.type, p.value]));
+  return { date: `${parts.year}-${parts.month}-${parts.day}`, minutes: Number(parts.hour) * 60 + Number(parts.minute) };
+}
+
+// Runs every 15 minutes (netlify/functions/reminders.mjs). Sends "chore time" and the
+// later "still to do" nudge once per person per day. A reminder that's more than
+// 2 hours late (e.g. the schedule was paused) is skipped rather than sent at bedtime.
+export async function runReminders(nowMs = Date.now()) {
+  await migrate();
+  const h = await getHousehold();
+  if (!h.setupDone || !h.notify?.on) return { sent: 0 };
+  let tz = h.notify.timeZone;
+  try { new Intl.DateTimeFormat('en-US', { timeZone: tz }); } catch { tz = 'America/New_York'; }
+  const now = localNow(nowMs, tz);
+  const chores = await choresFor(now.date);
+  let sent = 0;
+  for (const [kind, time] of [['chores', h.notify.choreTime], ['nudge', h.notify.nudgeTime]]) {
+    if (!TIME_RE.test(time || '')) continue;
+    const late = now.minutes - toMin(time);
+    if (late < 0 || late > 120) continue;
+    const byPerson = new Map();
+    for (const c of chores) {
+      if (kind === 'nudge' && !['not_done', 'redo'].includes(c.status)) continue;
+      byPerson.set(c.personId, [...(byPerson.get(c.personId) || []), c]);
+    }
+    for (const [personId, cs] of byPerson) {
+      const mark = `push/sent/${now.date}/${kind}/${personId}`;
+      if (await store.get(mark)) continue;
+      await store.set(mark, { at: nowMs });
+      const name = (await getPeople()).find((p) => p.id === personId)?.name || '';
+      sent += await notify([personId], kind, kind === 'chores'
+        ? { title: `Chore time${name ? ', ' + name : ''}!`, body: `Tonight: ${jobList(cs)}`, url: '/#/home', tag: 'chores' }
+        : { title: `Still to do: ${jobList(cs)}`, body: 'Tick it off and send it for review.', url: '/#/home', tag: 'chores' });
+    }
+  }
+  // tidy up old "already sent" marks
+  for (const k of (await store.list('push/sent/')).filter((k) => k.slice(10, 20) < now.date)) await store.del(k);
+  return { sent };
+}
+
 // ---------- router ----------
 export async function handle(req) {
   try {
@@ -279,7 +332,9 @@ async function routes(route, req, q, body) {
       await store.set('people', people);
       await store.set('checklists', checklists);
       await store.set('chart', { startDate, days });
-      await store.set('household', { ...h, name, setupDone: true, setupAt: Date.now() });
+      let timeZone = h.notify.timeZone;
+      try { if (body.timeZone) { new Intl.DateTimeFormat('en-US', { timeZone: body.timeZone }); timeZone = body.timeZone; } } catch { /* keep default */ }
+      await store.set('household', { ...h, name, setupDone: true, setupAt: Date.now(), notify: { ...h.notify, timeZone } });
       return { ok: true };
     }
     case 'POST /household': {
@@ -296,6 +351,78 @@ async function routes(route, req, q, body) {
       const h = await getHousehold();
       return { name: h.name, calendarName: h.calendarName };
     }
+    // ----- notifications -----
+    case 'GET /push/key': {
+      await auth(req);
+      return { publicKey: (await vapid()).publicKey };
+    }
+    case 'POST /push/subscribe': {
+      const me = await auth(req);
+      const s = body.subscription || {};
+      let ok = false;
+      try { ok = new URL(s.endpoint).protocol === 'https:'; } catch { /* not a URL */ }
+      if (!ok || !s.keys?.p256dh || !s.keys?.auth) fail(400, 'bad_sub', 'This phone didn’t give us what we need for notifications. Try again.');
+      // one phone = one person: signing up again on a shared phone moves it to whoever is signed in
+      await store.set(subKey(s.endpoint), {
+        endpoint: String(s.endpoint).slice(0, 1000),
+        keys: { p256dh: String(s.keys.p256dh).slice(0, 200), auth: String(s.keys.auth).slice(0, 100) },
+        personId: me.id,
+        createdAt: Date.now(),
+      });
+      return { ok: true };
+    }
+    case 'POST /push/unsubscribe': {
+      await auth(req);
+      if (body.endpoint) await store.del(subKey(String(body.endpoint)));
+      return { ok: true };
+    }
+    case 'GET /push/status': {
+      const me = await auth(req);
+      const ep = q('endpoint');
+      const subs = await allSubs();
+      const h = await getHousehold();
+      return {
+        thisPhone: ep ? (subs.find((s) => s.endpoint === ep)?.personId || null) : null,
+        phones: subs.filter((s) => s.personId === me.id).length,
+        prefs: await prefsFor(me.id),
+        notify: h.notify,
+      };
+    }
+    case 'POST /push/prefs': {
+      const me = await auth(req);
+      const prefs = await prefsFor(me.id);
+      for (const k of Object.keys(PREF_DEFAULTS)) if (typeof body[k] === 'boolean') prefs[k] = body[k];
+      await store.set('push/prefs/' + me.id, prefs);
+      return { prefs };
+    }
+    case 'POST /push/test': {
+      const me = await auth(req);
+      const n = await notify([me.id], 'test', { title: 'It works! 🔔', body: `Notifications are on for ${me.name}.`, url: '/#/settings/notify', tag: 'test' });
+      if (!n) fail(409, 'no_phones', 'Couldn’t reach any of your phones. Turn notifications off and on again on this phone.');
+      return { sent: n };
+    }
+    case 'POST /notify-settings': {
+      const me = await auth(req);
+      adultOnly(me);
+      const h = await getHousehold();
+      const n = { ...h.notify };
+      if (typeof body.on === 'boolean') n.on = body.on;
+      if (body.choreTime !== undefined) {
+        if (!TIME_RE.test(body.choreTime)) fail(400, 'bad_time', 'Pick a time for the chore reminder.');
+        n.choreTime = body.choreTime;
+      }
+      if (body.nudgeTime !== undefined) {
+        if (body.nudgeTime && !TIME_RE.test(body.nudgeTime)) fail(400, 'bad_time', 'That reminder time doesn’t look right.');
+        n.nudgeTime = body.nudgeTime || '';
+      }
+      if (body.timeZone !== undefined) {
+        try { new Intl.DateTimeFormat('en-US', { timeZone: String(body.timeZone) }); } catch { fail(400, 'bad_zone', 'That time zone doesn’t look right.'); }
+        n.timeZone = String(body.timeZone);
+      }
+      await store.set('household', { ...h, notify: n });
+      return { notify: n };
+    }
+
     case 'GET /version': {
       const me = await auth(req);
       adultOnly(me);
@@ -411,6 +538,13 @@ async function routes(route, req, q, body) {
       c.history = [...(c.history || []), { at: c.submittedAt, by: me.id, action: 'submitted' }];
       await saveChore(c);
       await store.set(queueKey(c), { date: c.date, id: c.id });
+      const adults = (await getPeople()).filter((p) => p.role === 'adult' && p.id !== me.id).map((p) => p.id);
+      await notify(adults, 'reviews', {
+        title: `${me.name} finished ${c.job}`,
+        body: 'Ready for you to review.',
+        url: '/#/review',
+        tag: 'review',
+      });
       return { chore: c };
     }
     case 'POST /chore/review': {
@@ -427,6 +561,11 @@ async function routes(route, req, q, body) {
       c.history = [...(c.history || []), { at: c.reviewedAt, by: me.id, action: decision, note: c.note || undefined }];
       await saveChore(c);
       await store.del(queueKey(c));
+      if (c.personId !== me.id) {
+        await notify([c.personId], 'results', decision === 'approved'
+          ? { title: `${c.job} approved! 🎉`, body: `Nice work. ${me.name} checked it off.`, url: `/#/chore/${c.date}/${c.id}`, tag: 'result' }
+          : { title: `${c.job} needs another go`, body: c.note || `${me.name} asked you to take another look.`, url: `/#/chore/${c.date}/${c.id}`, tag: 'result' });
+      }
       return { chore: c };
     }
     case 'POST /chore/save': {

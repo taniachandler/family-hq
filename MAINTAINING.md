@@ -10,9 +10,10 @@ So every release has to work on installs that already have months of data.
    - New features store data under **new keys** (e.g. `meals/2026-12-01`, `mealplan`) and treat "nothing there yet" as empty.
    - Never rename or delete an existing key, or change the shape of `people`, `chart`, `checklists`, `household`, `chore/...`, `grocery/...`, without adding a **migration step** that converts old data.
    - Never edit a migration step that has already been released. Add a new one.
-2. **Test the upgrade:** copy a `.data` folder from an older version, run `npm run dev` with the new code, and check everything still loads.
-3. **Bump the version** in BOTH `server/version.mjs` (`VERSION`) and `version.json`. Put a one-line, family-friendly summary in `version.json` → `notes`. That text shows in families' Settings.
-4. Push to `main`. Families see "Version X is out" in Settings within a day.
+2. **Run `npm test`** (notifications, end to end).
+3. **Test the upgrade:** copy a `.data` folder from an older version, run `npm run dev` with the new code, and check everything still loads.
+4. **Bump the version** in BOTH `server/version.mjs` (`VERSION`) and `version.json`. Put a one-line, family-friendly summary in `version.json` → `notes`. That text shows in families' Settings.
+5. Push to `main`. Families see "Version X is out" in Settings within a day.
 
 Use `1.1.0` for new features and `1.0.1` for fixes. Only use `2.0.0` if families must do something by hand (avoid this).
 

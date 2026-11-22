@@ -2,7 +2,7 @@
 // Keep VERSION in step with version.json at the top of the repo.
 import * as store from './store.mjs';
 
-export const VERSION = '1.0.0';
+export const VERSION = '1.1.0';
 
 // Where the newest version number is published. A family can turn the check off
 // by setting the Netlify environment variable UPDATE_CHECK_URL to "off".

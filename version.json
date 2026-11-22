@@ -1,5 +1,5 @@
 {
-  "version": "1.0.0",
+  "version": "1.1.0",
   "date": "2026-11-21",
-  "notes": "First public version: chores with review, groceries, family calendar, first-run setup, chore chart editor."
+  "notes": "New: phone notifications. Chore-time reminders, a nudge if it's not done, and alerts when a chore is ready to review, approved or sent back. Turn them on in Settings → Notifications."
 }

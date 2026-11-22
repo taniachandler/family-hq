@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node dev-server.mjs"
+    "dev": "node dev-server.mjs",
+    "test": "node tests/notifications.test.mjs"
   },
   "dependencies": {
     "@netlify/blobs": "8.1.0",

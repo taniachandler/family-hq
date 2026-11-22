@@ -340,3 +340,9 @@ input[type=time] { display: block; width: 100%; margin-top: 6px; min-height: 52p
 .save-bar { position: sticky; bottom: calc(env(safe-area-inset-bottom) + 10px); z-index: 5; }
 .save-bar .btn { box-shadow: var(--shadow); }
 .dirty-note { text-align: center; font-weight: 700; color: var(--redo); margin: 6px 0; }
+
+/* ---------- notifications ---------- */
+.steps { padding-left: 22px; margin: 8px 0; }
+.steps li { margin-bottom: 8px; }
+#home-push .notice { align-items: center; }
+#home-push .notice > span { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
