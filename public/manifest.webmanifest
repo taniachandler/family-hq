@@ -1,0 +1,9 @@
+{
+  "name": "Family HQ",
+  "short_name": "Family HQ",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FFF9F2",
+  "theme_color": "#7C5CBF",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}
